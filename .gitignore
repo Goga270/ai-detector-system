@@ -1,0 +1,30 @@
+# Фронт
+node_modules/
+dist/
+.output/
+.nuxt/
+.pnpm-store/
+package-lock.json
+
+.env
+.env.*
+!.env.example
+
+# Логи
+*.log
+npm-debug.log*
+
+# ML/Python
+__pycache__/
+venv/
+.venv/
+*.pyc
+.ipynb_checkpoints/
+
+# Общее
+.idea
+.DS_Store
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+
