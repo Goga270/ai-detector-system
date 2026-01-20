@@ -1,0 +1,167 @@
+/* 1. Подключение базовых слоев Tailwind */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* 2. Определение переменных темы */
+:root, [data-theme="dark"] {
+    /* ТЕМНАЯ ТЕМА (по умолчанию) */
+    /* Формат RGB (без rgb()) нужен для поддержки прозрачности в Tailwind (bg-primary/15) */
+    --primary-rgb: 139 92 246;   /* #8b5cf6 */
+    --accent-rgb: 124 58 237;    /* #7c3aed */
+    --background-rgb: 5 5 5;     /* #050505 */
+    --foreground-rgb: 248 250 252; /* #f8fafc */
+    --secondary-rgb: 17 16 26;
+
+    /* Обычные HEX переменные для использования в коде */
+    --primary: #8b5cf6;
+    --primary-foreground: oklch(0.98 0 0);
+    --secondary: #11101AFF;
+    --secondary-foreground: oklch(0.85 0 0);
+    --accent: #7c3aed;
+    --background: #050505;
+    --foreground: #f8fafc;
+    --muted: oklch(0.2 0.015 285);
+    --muted-foreground: oklch(0.55 0 0);
+
+    --border: rgba(139, 92, 246, 0.2);
+    --card: rgba(20, 15, 30, 0.6);
+    --input: rgba(20, 15, 30, 0.8);
+    --ring: #8b5cf6;
+
+    --neon-purple-glow: rgba(139, 92, 246, 0.5);
+    --success: #22c55e;
+    --warning: #f97316;
+    --error: #ef4444;
+}
+
+/* СВЕТЛАЯ ТЕМА */
+[data-theme='light'] {
+    --primary-rgb: 124 58 237;   /* #7c3aed */
+    --accent-rgb: 109 40 217;    /* #6d28d9 */
+    --background-rgb: 248 250 252; /* #f8fafc */
+    --foreground-rgb: 15 23 42;    /* #0f172a */
+
+    --primary: #7c3aed;
+    --accent: #6d28d9;
+    --background: #f8fafc;
+    --foreground: #0f172a;
+
+    --border: rgba(124, 58, 237, 0.1);
+    --card: rgba(255, 255, 255, 0.7);
+    --input: #ffffff;
+    --ring: #7c3aed;
+
+    --neon-purple-glow: rgba(124, 58, 237, 0.2);
+}
+
+@layer base {
+    body {
+        @apply bg-background text-foreground transition-colors duration-300;
+        font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    }
+}
+
+@layer components {
+    .glass-card {
+        background: var(--card);
+        backdrop-filter: blur(20px);
+        border: 1px solid var(--border);
+        @apply transition-all duration-300;
+    }
+
+    /* Кнопка с неоновым пульсирующим свечением */
+
+    /* Кастомный скроллбар в стиле AI */
+    .custom-scrollbar::-webkit-scrollbar {
+        width: 6px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-track {
+        background: rgba(var(--primary-rgb) / 0.05);
+        border-radius: 10px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+        background: rgba(var(--primary-rgb) / 0.3);
+        border-radius: 10px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+        background: rgba(var(--primary-rgb) / 0.5);
+    }
+
+
+    /* Btns */
+    .glow-button {
+        animation: pulse-glow 2s ease-in-out infinite;
+    }
+
+    .glow-button:hover {
+        animation: none;
+        box-shadow: 0 0 40px var(--neon-purple-glow), 0 0 80px var(--neon-purple-glow);
+    }
+
+    .btn {
+        @apply relative inline-flex items-center gap-2 rounded-lg font-semibold transition-all;
+    }
+
+    .btn-primary {
+        @apply  btn bg-primary text-primary-foreground hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50;
+    }
+
+    .btn-secondary {
+        @apply btn border border-border bg-secondary font-medium text-secondary-foreground hover:bg-secondary/80 disabled:cursor-not-allowed disabled:opacity-50
+    }
+
+    .btn-m {
+        @apply px-5 py-2 text-sm
+    }
+
+    /* ICONS */
+    .icon {
+        @apply flex items-center justify-center rounded-lg
+    }
+
+    .icon-primary {
+        @apply icon bg-gradient-to-br from-primary to-accent shadow-lg shadow-primary/25
+    }
+
+    .icon-secondary {
+        @apply icon border border-border bg-secondary
+    }
+
+    .icon-dark {
+        @apply icon bg-primary/20
+    }
+
+    .icon-m {
+        @apply h-9 w-9
+    }
+}
+
+/* 5. Анимации */
+@keyframes pulse-glow {
+    0%, 100% {
+        box-shadow: 0 0 15px var(--neon-purple-glow), 0 0 30px rgba(var(--primary-rgb) / 0.2);
+    }
+    50% {
+        box-shadow: 0 0 25px var(--neon-purple-glow), 0 0 50px rgba(var(--primary-rgb) / 0.4);
+    }
+}
+
+@keyframes sparkle {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.6; transform: scale(1.1); }
+}
+
+.sparkle-icon {
+    animation: sparkle 1.5s ease-in-out infinite;
+}
+
+/* Анимация для фоновых пятен */
+.animate-pulse-slow {
+    animation: pulse-slow 10s ease-in-out infinite;
+}
+
+@keyframes pulse-slow {
+    0%, 100% { opacity: 0.5; transform: scale(1) translate(0, 0); }
+    50% { opacity: 0.8; transform: scale(1.05) translate(-2%, 2%); }
+}
