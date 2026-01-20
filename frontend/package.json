@@ -1,0 +1,35 @@
+{
+  "name": "ai-detector-system-frontend",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "build": "nuxt build",
+    "dev": "nuxt dev",
+    "generate": "nuxt generate",
+    "preview": "nuxt preview",
+    "postinstall": "nuxt prepare",
+
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "type-check": "nuxi typecheck",
+    "validate": "npm run lint && npm run type-check"
+  },
+  "dependencies": {
+    "@nuxtjs/tailwindcss": "^6.14.0",
+    "nuxt": "^4.2.2",
+    "vue": "^3.5.26",
+    "vue-router": "^4.6.4",
+    "vuex": "^4.0.2"
+  },
+  "devDependencies": {
+    "@nuxt/eslint": "^1.12.1",
+    "@stylistic/eslint-plugin": "^5.7.0",
+    "@trivago/prettier-plugin-sort-imports": "^6.0.2",
+    "eslint": "^9.39.2",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-import": "^2.32.0",
+    "eslint-plugin-prettier": "^5.5.5",
+    "prettier": "^3.8.0"
+  }
+}
