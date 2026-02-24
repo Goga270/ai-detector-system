@@ -26,10 +26,10 @@ const strokeDashoffset = computed(() => {
 
 // Логика цвета (используем твои переменные из main.css)
 const color = computed(() => {
-  if (props.value > 70) return 'var(--error)'; // Красный (ИИ)
-  if (props.value > 40) return 'var(--warning)'; // Желтый (Подозрительно)
+  if (props.value > 70) return 'rgb(var(--destructive))'; // Красный (ИИ)
+  if (props.value > 40) return 'rgb(var(--warning))'; // Желтый (Подозрительно)
 
-  return 'var(--success)'; // Зеленый (Человек)
+  return 'rgb(var(--success))'; // Зеленый (Человек)
 });
 
 // Плавная анимация числа при монтировании или изменении
@@ -81,7 +81,7 @@ watch(
       <path
         :d="`M ${10 + strokeWidth / 2} ${radius + 10} A ${normalizedRadius} ${normalizedRadius} 0 0 1 ${radius * 2 + 10 - strokeWidth / 2} ${radius + 10}`"
         fill="none"
-        stroke="var(--border)"
+        stroke="rgb(var(--border) / 0.15)"
         :stroke-width="strokeWidth"
         stroke-linecap="round"
       />
@@ -97,15 +97,13 @@ watch(
         :stroke-dashoffset="strokeDashoffset"
         class="transition-all duration-300 ease-out"
         :style="{
-          filter: `drop-shadow(0 0 12px ${color}44)`
+          filter: `drop-shadow(${color} 0 0 12px)`
         }"
       />
-
-      <!-- Подписи -->
       <text
         :x="10"
         :y="radius + 40"
-        fill="var(--muted-foreground)"
+        fill="rgb(var(--muted-foreground))"
         font-size="11"
         class="font-medium uppercase tracking-wider"
       >
@@ -114,7 +112,7 @@ watch(
       <text
         :x="radius * 2 + 10"
         :y="radius + 40"
-        fill="var(--muted-foreground)"
+        fill="rgb(var(--muted-foreground))"
         font-size="11"
         text-anchor="end"
         class="font-medium uppercase tracking-wider"
@@ -123,12 +121,11 @@ watch(
       </text>
     </svg>
 
-    <div class="absolute bottom-2 flex flex-col items-center">
+    <div class="absolute bottom-4 flex flex-col items-center">
       <div class="flex items-baseline">
         <span class="text-5xl font-black transition-colors duration-500 tabular-nums" :style="{ color: color }">
           {{ animatedValue }}
         </span>
-        <span class="text-xl font-bold ml-0.5" :style="{ color: color }">%</span>
       </div>
       <span class="text-[10px] uppercase tracking-[0.2em] font-bold text-muted-foreground/60 mt-1">
         AI Probability

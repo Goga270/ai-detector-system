@@ -60,6 +60,7 @@ const detector: Module<DetectorState, RootState> = {
       if (!state.currentText.trim()) return;
 
       commit('SET_LOADING', true);
+      commit('SET_RESULT', null);
       try {
         const data = await $fetch<DetectionResult>('/api/analyze', {
           method: 'POST',
