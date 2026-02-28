@@ -31,5 +31,9 @@ const classes = computed(() => {
 </script>
 
 <template>
-  <div :class="classes">{{ iconName }}</div>
+  <div :class="classes">
+    <slot>
+      <Icon :name="iconName" />
+    </slot>
+  </div>
 </template>

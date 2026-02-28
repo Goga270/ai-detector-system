@@ -5,52 +5,79 @@
 
 /* 2. Определение переменных темы */
 :root, [data-theme="dark"] {
-    /* ТЕМНАЯ ТЕМА (по умолчанию) */
-    /* Формат RGB (без rgb()) нужен для поддержки прозрачности в Tailwind (bg-primary/15) */
-    --primary-rgb: 139 92 246;   /* #8b5cf6 */
-    --accent-rgb: 124 58 237;    /* #7c3aed */
-    --background-rgb: 5 5 5;     /* #050505 */
-    --foreground-rgb: 248 250 252; /* #f8fafc */
-    --secondary-rgb: 17 16 26;
+    --background: 5 5 5;
+    --foreground: 248 250 252;
 
-    /* Обычные HEX переменные для использования в коде */
-    --primary: #8b5cf6;
-    --primary-foreground: oklch(0.98 0 0);
-    --secondary: #11101AFF;
-    --secondary-foreground: oklch(0.85 0 0);
-    --accent: #7c3aed;
-    --background: #050505;
-    --foreground: #f8fafc;
-    --muted: oklch(0.2 0.015 285);
-    --muted-foreground: oklch(0.55 0 0);
+    --card: 20 15 30;
+    --card-foreground: 242 242 242;
 
-    --border: rgba(139, 92, 246, 0.2);
-    --card: rgba(20, 15, 30, 0.6);
-    --input: rgba(20, 15, 30, 0.8);
-    --ring: #8b5cf6;
+    --popover: 20 15 30;
+    --popover-foreground: 242 242 242;
+
+    --primary: 139 92 246;
+    --primary-foreground: 250 250 250;
+
+    --secondary: 17 16 26;
+    --secondary-foreground: 217 217 217;
+
+    --muted: 30 30 40;
+    --muted-foreground: 140 140 160;
+
+    --accent: 124 58 237;
+    --accent-foreground: 250 250 250;
+
+    --destructive: 239 68 68;
+    --destructive-foreground: 250 250 250;
+
+    --success: 34 197 94;
+    --warning: 249 115 22;
+
+    --border: 139 92 246;
+    --input: 20 15 30;
+    --ring: 139 92 246;
+
+    --chart-1: 139 92 246;
+    --chart-2: 30 180 200;
+    --chart-3: 50 200 150;
+    --chart-4: 249 115 22;
+    --chart-5: 200 50 100;
 
     --neon-purple-glow: rgba(139, 92, 246, 0.5);
-    --success: #22c55e;
-    --warning: #f97316;
-    --error: #ef4444;
+    --radius: 0.75rem;
 }
 
 /* СВЕТЛАЯ ТЕМА */
 [data-theme='light'] {
-    --primary-rgb: 124 58 237;   /* #7c3aed */
-    --accent-rgb: 109 40 217;    /* #6d28d9 */
-    --background-rgb: 248 250 252; /* #f8fafc */
-    --foreground-rgb: 15 23 42;    /* #0f172a */
+    --background: 248 250 252;
+    --foreground: 15 23 42;
 
-    --primary: #7c3aed;
-    --accent: #6d28d9;
-    --background: #f8fafc;
-    --foreground: #0f172a;
+    --card: 255 255 255;
+    --card-foreground: 15 23 42;
 
-    --border: rgba(124, 58, 237, 0.1);
-    --card: rgba(255, 255, 255, 0.7);
-    --input: #ffffff;
-    --ring: #7c3aed;
+    --popover: 255 255 255;
+    --popover-foreground: 15 23 42;
+
+    --primary: 124 58 237;
+    --primary-foreground: 255 255 255;
+
+    --secondary: 241 245 249;
+    --secondary-foreground: 15 23 42;
+
+    --muted: 241 245 249;
+    --muted-foreground: 100 116 139;
+
+    --accent: 109 40 217;
+    --accent-foreground: 255 255 255;
+
+    --destructive: 220 38 38;
+    --destructive-foreground: 255 255 255;
+
+    --success: 22 163 74;
+    --warning: 217 119 6;
+
+    --border: 124 58 237;
+    --input: 255 255 255;
+    --ring: 124 58 237;
 
     --neon-purple-glow: rgba(124, 58, 237, 0.2);
 }
@@ -64,9 +91,9 @@
 
 @layer components {
     .glass-card {
-        background: var(--card);
+        background: rgb(var(--card) / 0.6);
         backdrop-filter: blur(20px);
-        border: 1px solid var(--border);
+        border: 1px solid rgb(var(--border) / 0.15);
         @apply transition-all duration-300;
     }
 
@@ -77,15 +104,15 @@
         width: 6px;
     }
     .custom-scrollbar::-webkit-scrollbar-track {
-        background: rgba(var(--primary-rgb) / 0.05);
+        background: rgb(var(--primary) / 0.05);
         border-radius: 10px;
     }
     .custom-scrollbar::-webkit-scrollbar-thumb {
-        background: rgba(var(--primary-rgb) / 0.3);
+        background: rgb(var(--primary) / 0.3);
         border-radius: 10px;
     }
     .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-        background: rgba(var(--primary-rgb) / 0.5);
+        background: rgb(var(--primary) / 0.5);
     }
 
 
@@ -100,50 +127,58 @@
     }
 
     .btn {
-        @apply relative inline-flex items-center gap-2 rounded-lg font-semibold transition-all;
+        @apply relative inline-flex items-center gap-1 rounded-lg font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed;
     }
 
     .btn-primary {
-        @apply  btn bg-primary text-primary-foreground hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50;
+        @apply  btn bg-primary text-primary-foreground shadow-lg shadow-primary/20 hover:brightness-110;
     }
 
     .btn-secondary {
-        @apply btn border border-border bg-secondary font-medium text-secondary-foreground hover:bg-secondary/80 disabled:cursor-not-allowed disabled:opacity-50
+        @apply btn border border-border/15 bg-secondary font-medium text-secondary-foreground hover:bg-secondary/80 disabled:cursor-not-allowed disabled:opacity-50
     }
 
+    .btn-ghost { @apply btn text-muted-foreground hover:text-foreground hover:bg-white/5; }
+
+    .btn-s {
+        @apply h-7 px-3 text-xs md:text-sm;
+    }
     .btn-m {
-        @apply px-5 py-2 text-sm
+        @apply h-9 px-4 text-sm md:text-base;
+    }
+    .btn-l {
+        @apply h-11 px-6 text-base;
     }
 
     /* ICONS */
-    .icon {
-        @apply flex items-center justify-center rounded-lg
+    .icon-box {
+        @apply flex items-center justify-center rounded-lg flex-shrink-0
     }
 
     .icon-primary {
-        @apply icon bg-gradient-to-br from-primary to-accent shadow-lg shadow-primary/25
+        @apply icon-box bg-gradient-to-br from-primary to-accent shadow-lg shadow-primary/25 text-white;
     }
 
     .icon-secondary {
-        @apply icon border border-border bg-secondary
+        @apply icon-box border border-border/15 bg-secondary text-primary;
     }
 
     .icon-dark {
-        @apply icon bg-primary/20
+        @apply icon-box bg-primary/10 text-primary;
     }
 
-    .icon-m {
-        @apply h-9 w-9
-    }
+    .icon-s { @apply h-7 w-7 p-1.5; }
+    .icon-m { @apply h-9 w-9 p-2; }
+    .icon-l { @apply h-11 w-11 p-2.5; }
 }
 
 /* 5. Анимации */
 @keyframes pulse-glow {
     0%, 100% {
-        box-shadow: 0 0 15px var(--neon-purple-glow), 0 0 30px rgba(var(--primary-rgb) / 0.2);
+        box-shadow: 0 0 15px var(--neon-purple-glow), 0 0 30px rgb(var(--primary) / 0.2);
     }
     50% {
-        box-shadow: 0 0 25px var(--neon-purple-glow), 0 0 50px rgba(var(--primary-rgb) / 0.4);
+        box-shadow: 0 0 25px var(--neon-purple-glow), 0 0 50px rgb(var(--primary) / 0.4);
     }
 }
 
