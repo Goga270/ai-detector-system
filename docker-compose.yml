@@ -1,0 +1,33 @@
+version: '3.8'
+
+services:
+  # ML-микросервис
+  ml-api:
+    build:
+      context: ./ml
+      dockerfile: api/Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - YANDEX_FOLDER_ID=${YANDEX_FOLDER_ID}
+      - YANDEX_API_KEY=${YANDEX_API_KEY}
+      - VLLM_URL=http://llm-node:8080/v1
+
+  # Бэк
+  java-backend:
+    build: ./Backend
+    ports:
+      - "8080:8080"
+    depends_on:
+      - ml-api
+    environment:
+      - ML_SERVICE_URL=http://ml-api:8000
+
+  # vLLM Нода (Локальная LLM)
+  llm-node:
+    image: vllm/vllm-openai:latest
+    ports:
+      - "8001:8000"
+    environment:
+      - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
+    command: --model
