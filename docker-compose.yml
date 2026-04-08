@@ -25,9 +25,23 @@ services:
 
   # vLLM Нода (Локальная LLM)
   llm-node:
-    image: vllm/vllm-openai:latest
+    image: vllm/vllm-openai-rocm:latest
     ports:
       - "8001:8000"
     environment:
       - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
-    command: --model
+    devices:
+      - /dev/kfd
+      - /dev/dri
+    security_opt:
+      - seccomp:unconfined
+    group_add:
+      - video
+    ipc: host
+    command: >
+      --model Qwen/Qwen2.5-7B-Instruct-AWQ
+      --quantization awq
+      --gpu-memory-utilization 0.8
+      --dtype half
+      --max-model-len 4096
+      --trust-remote-code
