@@ -8,11 +8,15 @@ package-lock.json
 
 .env
 .env.*
+dev.env
+
 !.env.example
 
 # Логи
 *.log
 npm-debug.log*
+
+backend/logs/
 
 # ML/Python
 __pycache__/
@@ -20,6 +24,9 @@ venv/
 .venv/
 *.pyc
 .ipynb_checkpoints/
+bert_model/
+/data/
+data_parser/cyberleninka/data/
 
 # Общее
 .idea
