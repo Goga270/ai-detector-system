@@ -1,47 +1,51 @@
 version: '3.8'
 
 services:
-  # ML-микросервис
-  ml-api:
+  # 1. ФРОНТЕНД
+  frontend:
     build:
-      context: ./ml
-      dockerfile: api/Dockerfile
+      context: ./frontend
     ports:
-      - "8000:8000"
+      - "3000:3000"
     environment:
-      - YANDEX_FOLDER_ID=${YANDEX_FOLDER_ID}
-      - YANDEX_API_KEY=${YANDEX_API_KEY}
-      - VLLM_URL=http://llm-node:8080/v1
+      - NUXT_PUBLIC_API_BASE_URL=http://localhost:8080/api/v1
+    depends_on:
+      - backend
 
-  # Бэк
-  java-backend:
-    build: ./Backend
+  # 2. JAVA БЭКЕНД
+  backend:
+    build:
+      context: ./backend
     ports:
       - "8080:8080"
+    environment:
+      - ML_CALIBRATOR_URL=http://calibrator:8000/predict
     depends_on:
-      - ml-api
-    environment:
-      - ML_SERVICE_URL=http://ml-api:8000
+      - calibrator
 
-  # vLLM Нода (Локальная LLM)
-  llm-node:
-    image: vllm/vllm-openai-rocm:latest
+  # 3. ML СЛОЙ
+  calibrator:
+    build:
+      context: ./ml/api/calibrator
     ports:
-      - "8001:8000"
+      - "8000:8000"
+    # expose:
+    #  - "8000" # Порт доступен только внутри сети Docker для Java Бэка
     environment:
-      - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
-    devices:
-      - /dev/kfd
-      - /dev/dri
-    security_opt:
-      - seccomp:unconfined
-    group_add:
-      - video
-    ipc: host
-    command: >
-      --model Qwen/Qwen2.5-7B-Instruct-AWQ
-      --quantization awq
-      --gpu-memory-utilization 0.8
-      --dtype half
-      --max-model-len 4096
-      --trust-remote-code
+      - BERT_URL=http://bert-service:8000/score
+      - DETECTGPT_URL=http://detectgpt-service:8000/score
+    depends_on:
+      - bert-service
+      - detectgpt-service
+
+  bert-service:
+    build:
+      context: ./ml/api/bert_service
+    expose:
+      - "8000"
+
+  detectgpt-service:
+    build:
+      context: ./ml/api/detectgpt_service
+    expose:
+      - "8000"

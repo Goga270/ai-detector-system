@@ -14,8 +14,8 @@ import json
 current_dir = os.path.dirname(os.path.abspath(__file__))
 ml_root = os.path.dirname(os.path.dirname(current_dir))
 
-model_path = os.path.join(ml_root, 'models', 'ai_text_classifier_pipeline.pkl')
-stopwords_path = os.path.join(ml_root, 'models', 'russian_stopwords.pkl')
+model_path = os.path.join(ml_root, 'ml/models', 'ai_text_classifier_pipeline.pkl')
+stopwords_path = os.path.join(ml_root, 'ml/models', 'russian_stopwords.pkl')
 
 try:
     model = joblib.load(model_path)
