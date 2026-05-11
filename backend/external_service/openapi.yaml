@@ -1,0 +1,153 @@
+openapi: 3.0.3
+info:
+  title: external_service
+  version: "1.0"
+servers:
+  - url: http://127.0.0.1:8004
+    description: local default (EXTERNAL_PORT)
+paths:
+  /gateway/detect/text:
+    post:
+      tags: [gateway]
+      summary: Detect from plain text
+      operationId: detect_text
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TextRequest"
+            example:
+              text: "Sample text for detection."
+      responses:
+        "200":
+          description: Calibrator payload
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnalysisResponse"
+        "400":
+          description: Empty text
+        "502":
+          description: Calibrator unreachable
+        "503":
+          description: HTTP client not ready
+  /gateway/detect/pdf:
+    post:
+      tags: [gateway]
+      summary: Detect from PDF upload
+      operationId: detect_pdf
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: PDF (application/pdf)
+      responses:
+        "200":
+          description: Calibrator payload
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnalysisResponse"
+        "400":
+          description: Not a PDF or no extractable text
+        "501":
+          description: pypdf / pdf_utils missing
+        "502":
+          description: Calibrator unreachable
+  /gateway/health:
+    get:
+      tags: [gateway]
+      summary: Gateway and calibrator probe
+      operationId: gateway_health
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GatewayHealth"
+components:
+  schemas:
+    TextRequest:
+      type: object
+      required: [text]
+      properties:
+        text:
+          type: string
+    SpanResult:
+      type: object
+      required: [start_char, end_char, text, avg_confidence]
+      properties:
+        start_char:
+          type: integer
+        end_char:
+          type: integer
+        text:
+          type: string
+        avg_confidence:
+          type: number
+          format: float
+    AnalysisResponse:
+      type: object
+      additionalProperties: true
+      required:
+        - verdict
+        - confidence
+        - ai_percentage
+        - risk_level
+        - explanation
+        - technical_consensus
+        - judge_agreement
+        - needs_human_review
+        - review_reason
+      properties:
+        verdict:
+          type: string
+        confidence:
+          type: number
+          format: float
+        ai_percentage:
+          type: number
+          format: float
+        risk_level:
+          type: string
+        spans:
+          type: array
+          items:
+            $ref: "#/components/schemas/SpanResult"
+          default: []
+        explanation:
+          type: string
+        technical_consensus:
+          type: string
+        judge_agreement:
+          type: number
+          format: float
+        needs_human_review:
+          type: boolean
+        review_reason:
+          type: string
+    GatewayHealth:
+      type: object
+      properties:
+        status:
+          type: string
+          example: ok
+        service:
+          type: string
+          example: gateway
+        calibrator:
+          type: boolean
+        calibrator_url:
+          type: string
+        detail:
+          type: string
+          nullable: true
