@@ -1,13 +1,16 @@
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path.cwd().parent))
+
 import json
 import logging
 from typing import List, Tuple, Optional, Dict, Any
-
 from llm_client import YandexGPTClient
 
 logger = logging.getLogger(__name__)
 
-
 class JudgeD2:
+    """Судья 2: Адвокат автора (поиск человеческих признаков)."""
     def __init__(self, client: YandexGPTClient):
         self.client = client
         self.system_prompt = """### ROLE
@@ -57,22 +60,19 @@ class JudgeD2:
             lines.append(f"- [{s}:{e}] {score:.2f}: \"{snippet}\"")
         return "\n".join(lines)
 
-    async def defend(
-        self,
-        text: str,
-        reasoner_result: Optional[Dict[str, Any]] = None,
-        bert_mean: float = 0.0,
-        dgpt_score: float = 0.0,
-        spans: Optional[List[Tuple[int, int, float]]] = None,
-    ) -> Dict[str, Any]:
+    async def defend(self, text: str,
+                     current_verdict: Optional[Dict[str, Any]] = None,
+                     bert_score: float = 0.0,
+                     dgpt_score: float = 0.0,
+                     spans: Optional[List[Tuple[int, int, float]]] = None) -> Dict[str, Any]:
         truncated_text = text[:3000] if len(text) > 3000 else text
         spans_str = self._format_spans(truncated_text, spans) if spans else "No span data."
-        verdict_str = json.dumps(reasoner_result, ensure_ascii=False) if reasoner_result else "No verdict yet."
+        verdict_str = json.dumps(current_verdict, ensure_ascii=False) if current_verdict else "No verdict yet."
 
         user = f"""TEXT (truncated): {truncated_text}
 
 TECHNICAL SIGNALS:
-- BERT: {bert_mean:.3f}
+- BERT: {bert_score:.3f}
 - DetectGPT: {dgpt_score:.3f}
 - Span anomalies:
 {spans_str}
