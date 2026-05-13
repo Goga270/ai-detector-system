@@ -51,14 +51,15 @@ watch(isMenuOpen, (val) => {
           </span></NuxtLink
         >
         <div class="hidden md:flex items-center gap-1">
-          <NuxtLink
-            v-for="path in navPaths"
-            :key="path.path"
-            class="px-4 py-2 text-sm font-medium transition-colors rounded-lg hover:bg-primary/5 text-muted-foreground hover:text-foreground"
-            :to="path.path"
-          >
-            {{ path.name }}</NuxtLink
-          >
+          <NuxtLink v-for="path in navPaths" :key="path.path" class="px-4 py-2 transition-colors" :to="path.path">
+            <AppText
+              type="small"
+              :color="route.path === path.path ? 'default' : 'muted'"
+              class="font-semibold hover:text-foreground transition-colors"
+            >
+              {{ path.name }}
+            </AppText>
+          </NuxtLink>
         </div>
         <div class="hidden md:flex items-center gap-3">
           <ThemeSwitcher />
@@ -89,7 +90,11 @@ watch(isMenuOpen, (val) => {
             <!-- Ссылки -->
             <div class="flex flex-col px-4 sm:px-6">
               <NuxtLink v-for="path in navPaths" :key="path.path" class="py-4" :to="path.path">
-                <AppText type="body" color="muted" class="font-semibold hover:text-foreground transition-colors">
+                <AppText
+                  type="body"
+                  :color="route.path === path.path ? 'default' : 'muted'"
+                  class="font-semibold hover:text-foreground transition-colors"
+                >
                   {{ path.name }}
                 </AppText>
               </NuxtLink>
@@ -122,5 +127,9 @@ watch(isMenuOpen, (val) => {
 .menu-leave-to {
   opacity: 0;
   transform: translateY(-20px);
+}
+
+.link.router-link-exact-active {
+  color: var(--primary);
 }
 </style>

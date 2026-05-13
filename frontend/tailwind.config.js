@@ -1,5 +1,4 @@
 /** @type {import('tailwindcss').Config} */
-
 const colorKeys = [
   'background',
   'foreground',
@@ -49,5 +48,5 @@ module.exports = {
       }
     }
   },
-  plugins: []
+  plugins: [require('tailwindcss-animate')]
 };

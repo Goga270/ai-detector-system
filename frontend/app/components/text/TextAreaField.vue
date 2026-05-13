@@ -102,7 +102,7 @@ function handleClear() {
             @click="handleAnalyze"
           >
             <template #iconBefore>
-              <Icon v-show="analyzeIsLoading" name="lucide:loader-2 animate-spin" />
+              <Icon v-show="analyzeIsLoading" name="lucide:loader-2" class="animate-spin" />
             </template>
           </Btn>
         </div>
