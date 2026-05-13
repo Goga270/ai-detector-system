@@ -1,5 +1,5 @@
 export default defineNuxtConfig({
-  modules: ['@nuxtjs/tailwindcss', '@nuxt/eslint', '@nuxt/icon'],
+  modules: ['@nuxtjs/tailwindcss', '@nuxt/eslint', '@nuxt/icon', 'shadcn-nuxt'],
   devtools: { enabled: true },
   app: {
     head: {
@@ -9,11 +9,21 @@ export default defineNuxtConfig({
     }
   },
   css: ['~/assets/css/main.css'],
+  runtimeConfig: {
+    public: {
+      apiBaseUrl: '',
+      useMocks: false
+    }
+  },
   compatibilityDate: '2025-07-15',
   eslint: {
     config: {
-      stylistic: true // Включает встроенную поддержку стилистики
+      stylistic: true
     }
+  },
+  shadcn: {
+    prefix: 'Ui',
+    componentDir: './app/components/ui'
   },
   tailwindcss: {
     cssPath: '~/assets/css/main.css',
