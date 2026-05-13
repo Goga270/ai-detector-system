@@ -1,9 +1,12 @@
-import requests
-import numpy as np
+import hashlib
 import logging
-from typing import Dict, Any, List, Optional
+import time
 from dataclasses import dataclass, field
 from enum import Enum
+from typing import Any, Dict, List, Optional
+
+import numpy as np
+import requests
 
 logger = logging.getLogger(__name__)
 
@@ -79,7 +82,6 @@ class CalibratorService:
 
     def _call_bert(self, text: str) -> Dict[str, Any]:
         """Вызов BERT-сервиса для получения спанов"""
-        text_preview = text[:200] + "..." if len(text) > 200 else text
         logger.debug(f"Calling BERT service at {self.bert_url}, text length: {len(text)} chars")
         try:
             resp = requests.post(
@@ -150,6 +152,13 @@ class CalibratorService:
         }
         try:
             resp = requests.post(self.reasoner_url, json=payload, timeout=self.timeout)
+            if resp.status_code >= 400:
+                body_preview = (resp.text or "")[:2000]
+                logger.error(
+                    "Reasoner HTTP %s: %s",
+                    resp.status_code,
+                    body_preview or "(empty body)",
+                )
             resp.raise_for_status()
             result = resp.json()
             logger.info(f"Reasoner service responded successfully, verdict: {result.get('verdict', 'UNKNOWN')}, confidence: {result.get('confidence', 0):.4f}")
@@ -274,15 +283,36 @@ class CalibratorService:
         logger.debug(f"Base prob from verdict: verdict={verdict}, confidence={confidence:.4f} -> prob={result:.4f}")
         return result
 
-    def _compute_base_confidence(self, final_verdict: str, final_confidence: float,
-                                 detectgpt_score: float) -> tuple:
+    def _compute_base_confidence(
+        self,
+        final_verdict: str,
+        final_confidence: float,
+        detectgpt_score: float,
+        bert_span_count: int = 0,
+    ) -> tuple:
         """
         Вычисляет базовую вероятность AI и уровень конфликта,
-        комбинируя финальный вердикт (от get_final_verdict) и DetectGPT
+        комбинируя финальный вердикт (от get_final_verdict) и DetectGPT.
+
+        Без BERT-спанов высокая кривизна DetectGPT не подтверждена токенным детектором —
+        сильно снижаем вклад dgpt и потолок llm_prob (меньше «всегда 96%»).
         """
         llm_prob = self._base_prob_from_verdict(final_verdict, final_confidence)
 
         dgpt_prob = min(1.0, max(0.0, detectgpt_score / 20.0))
+
+        if bert_span_count == 0:
+            dgpt_prob *= 0.42
+            if final_verdict == "AI":
+                llm_prob = min(llm_prob, 0.62)
+            elif final_verdict == "MIXED":
+                llm_prob = min(llm_prob, 0.58)
+            logger.info(
+                "[CALIB] no BERT spans: damped dgpt_prob=%.4f llm_prob=%.4f (verdict=%s)",
+                dgpt_prob,
+                llm_prob,
+                final_verdict,
+            )
 
         logger.debug(f"LLM probability: {llm_prob:.4f}, DetectGPT probability: {dgpt_prob:.4f}")
 
@@ -363,21 +393,104 @@ class CalibratorService:
         logger.debug(f"Extracted signals: {signals[:4]}")
         return signals[:4]
 
+    def _repair_tail_if_single_prefix_span(self, spans: List[Dict], full_text: str) -> List[Dict]:
+        """
+        Ризонер часто ошибается в end_char при «спан на весь текст».
+        Один спан с start=0, не до конца документа, непустой хвост и префикс уже существенный —
+        расширяем end до len(full_text), чтобы spans.text совпадал с запросом.
+        """
+        n = len(full_text)
+        if not spans or len(spans) != 1 or n <= 0:
+            return spans
+        s = dict(spans[0])
+        try:
+            st = int(s.get("start_char", 0))
+            en = int(s.get("end_char", 0))
+        except (TypeError, ValueError):
+            return spans
+        if st != 0 or en >= n:
+            return spans
+        tail = full_text[en:]
+        if not tail.strip():
+            return spans
+        min_prefix = max(30, n // 5)
+        if en < min_prefix:
+            logger.debug(
+                "[CALIB] span tail repair skipped: prefix_len=%s < min_prefix=%s",
+                en,
+                min_prefix,
+            )
+            return spans
+        logger.info(
+            "[CALIB] span tail repair: extend end %s -> %s (doc_len=%s tail_len=%s)",
+            en,
+            n,
+            n,
+            len(tail),
+        )
+        s["end_char"] = n
+        return [s]
+
     def _convert_to_span_results(self, spans: List[Dict], original_text: str) -> List[SpanResult]:
-        """Преобразует сырые спаны в формат SpanResult."""
-        span_results = []
-        for s in spans:
-            start = s.get("start_char", 0)
-            end = s.get("end_char", 0)
-            span_results.append(SpanResult(
-                text=original_text[start:end],
-                start=start,
-                end=end,
-                score=s.get("confidence", s.get("avg_confidence", 0.8)),
-                label="ai",
-                source="llm_reasoner"
-            ))
-        logger.debug(f"Converted {len(span_results)} spans to SpanResult objects")
+        """Преобразует сырые спаны в формат SpanResult (текст всегда из original_text по индексам)."""
+        n = len(original_text)
+        span_results: List[SpanResult] = []
+        for i, s in enumerate(spans):
+            raw_start = s.get("start_char", 0)
+            raw_end = s.get("end_char", 0)
+            try:
+                start = int(raw_start)
+                end = int(raw_end)
+            except (TypeError, ValueError):
+                logger.warning("Span %s: non-int bounds start=%r end=%r, skip", i, raw_start, raw_end)
+                continue
+            start = max(0, min(start, n))
+            end = max(start, min(end, n))
+            if start != int(raw_start) or end != int(raw_end):
+                logger.warning(
+                    "Span %s: bounds clamped to document len=%s: (%s,%s) -> (%s,%s)",
+                    i,
+                    n,
+                    raw_start,
+                    raw_end,
+                    start,
+                    end,
+                )
+            sliced = original_text[start:end]
+            llm_text = s.get("text")
+            if isinstance(llm_text, str) and llm_text and llm_text != sliced:
+                logger.info(
+                    "Span %s: LLM text field length=%s != slice length=%s (indices %s:%s); using slice from document",
+                    i,
+                    len(llm_text),
+                    len(sliced),
+                    start,
+                    end,
+                )
+            if end < n and (n - end) > 20:
+                logger.debug(
+                    "Span %s: partial coverage end=%s doc_len=%s (%.0f%% of doc)",
+                    i,
+                    end,
+                    n,
+                    100.0 * end / n if n else 0.0,
+                )
+            span_results.append(
+                SpanResult(
+                    text=sliced,
+                    start=start,
+                    end=end,
+                    score=float(s.get("confidence", s.get("avg_confidence", 0.8))),
+                    label="ai",
+                    source="llm_reasoner",
+                )
+            )
+        logger.info(
+            "Converted %s spans (doc_len=%s); previews: %s",
+            len(span_results),
+            n,
+            [x.text[:48].replace("\n", " ") + ("…" if len(x.text) > 48 else "") for x in span_results[:3]],
+        )
         return span_results
 
     def calibrate(self, text: str) -> FinalResult:
@@ -386,7 +499,11 @@ class CalibratorService:
         Возвращает FinalResult с полями новой структуры.
         """
         logger.info("=" * 60)
-        logger.info(f"Starting calibration for text (length: {len(text)} chars)")
+        logger.info(
+            "[CALIB] start text_len=%s text_sha256_prefix=%s",
+            len(text),
+            hashlib.sha256(text.encode("utf-8")).hexdigest()[:12],
+        )
 
         logger.info("Step 1: Calling BERT and DetectGPT services")
         bert_res = self._call_bert(text)
@@ -396,8 +513,18 @@ class CalibratorService:
         bert_mean = self._compute_bert_mean(bert_res)
         dgpt_score = dgpt_res.get("normalized_curvature", 0.0)
 
-        logger.info(f"BERT: {len(bert_spans)} spans, mean confidence={bert_mean:.4f}")
-        logger.info(f"DetectGPT: curvature={dgpt_score:.4f}")
+        logger.info(
+            "[CALIB] bert num_spans=%s mean_conf=%.4f err=%s | first_span=%s",
+            len(bert_spans),
+            bert_mean,
+            bert_res.get("error"),
+            bert_spans[0] if bert_spans else None,
+        )
+        logger.info(
+            "[CALIB] detectgpt normalized_curvature=%.4f raw_err=%s",
+            dgpt_score,
+            dgpt_res.get("error"),
+        )
 
         logger.info("Step 2: Calling Reasoner service")
         reasoner_json = self._call_reasoner(text, bert_mean, dgpt_score, bert_spans)
@@ -407,6 +534,7 @@ class CalibratorService:
                 "verdict": "MIXED",
                 "confidence": 0.5,
                 "ai_percentage": 0.5,
+                "reasoning": "LLM Arbiter unavailable",
                 "explanation": "LLM Arbiter unavailable",
                 "detected_spans": [],
                 "technical_consensus": "",
@@ -415,9 +543,23 @@ class CalibratorService:
             }
 
         detected_spans = reasoner_json.get("detected_spans", [])
+        ds_bounds = [
+            (x.get("start_char"), x.get("end_char"), len((x.get("text") or "")))
+            for x in detected_spans[:8]
+        ]
+        logger.info(
+            "[CALIB] reasoner verdict=%s conf=%.4f detected_spans=%s bounds(textlen)=%s reasoning_preview=%s",
+            reasoner_json.get("verdict"),
+            float(reasoner_json.get("confidence", 0) or 0),
+            len(detected_spans),
+            ds_bounds,
+            (reasoner_json.get("reasoning") or reasoner_json.get("explanation") or "")[:160],
+        )
         if not detected_spans:
             logger.debug("No detected spans from Reasoner, using BERT spans as fallback")
             detected_spans = bert_spans
+        else:
+            detected_spans = self._repair_tail_if_single_prefix_span(detected_spans, text)
         span_results = self._convert_to_span_results(detected_spans, text)
 
         logger.info("Step 3: Calling Audit and Defense services")
@@ -441,18 +583,47 @@ class CalibratorService:
                 "explanation": "Defense service unavailable",
             }
 
+        logger.info(
+            "[CALIB] audit audit_passed=%s adjusted_verdict=%s critical=%s",
+            audit_json.get("audit_passed"),
+            audit_json.get("adjusted_verdict"),
+            audit_json.get("critical_errors"),
+        )
+        logger.info(
+            "[CALIB] defense would_overturn=%s proposed=%s conf=%.3f expl_preview=%s",
+            defense_json.get("would_overturn"),
+            defense_json.get("proposed_verdict"),
+            float(defense_json.get("defense_confidence") or 0),
+            str(defense_json.get("explanation") or "")[:120],
+        )
+
         logger.info("Step 4: Running calibration logic")
 
         final_verdict = reasoner_json.get("verdict", "MIXED")
         final_confidence = reasoner_json.get("confidence", 0.5)
 
+        llm_raw = self._base_prob_from_verdict(final_verdict, final_confidence)
+        dgpt_raw = min(1.0, max(0.0, dgpt_score / 20.0))
         base_prob, base_conf, has_conflict = self._compute_base_confidence(
-            final_verdict, final_confidence, dgpt_score
+            final_verdict, final_confidence, dgpt_score, len(bert_spans)
         )
-
+        logger.info(
+            "[CALIB] scores raw_llm_prob=%.4f raw_dgpt_prob=%.4f (curv=%.3f) bert_spans=%s -> "
+            "base_combined=%.4f base_conf=%.4f conflict=%s",
+            llm_raw,
+            dgpt_raw,
+            dgpt_score,
+            len(bert_spans),
+            base_prob,
+            base_conf,
+            has_conflict,
+        )
         audit_passed = audit_json.get("audit_passed", True)
         audit_adjusted_verdict = audit_json.get("adjusted_verdict")
-        defense_possible = defense_json.get("defense_possible", False)
+        defense_possible = defense_json.get(
+            "defense_possible",
+            defense_json.get("would_overturn", False),
+        )
         defense_proposed_verdict = defense_json.get("proposed_verdict")
 
         final_prob, final_conf = self._apply_judges(
@@ -460,7 +631,13 @@ class CalibratorService:
             audit_passed, audit_adjusted_verdict,
             defense_possible, defense_proposed_verdict
         )
-
+        logger.info(
+            "[CALIB] after_judges final_prob=%.4f final_conf=%.4f (audit_passed=%s defense_possible=%s)",
+            final_prob,
+            final_conf,
+            audit_passed,
+            defense_possible,
+        )
         if final_prob < self.thresholds["low"]:
             risk = RiskLevel.LOW.value
         elif final_prob < self.thresholds["medium"]:
@@ -471,8 +648,13 @@ class CalibratorService:
         d2_strong = defense_possible and defense_proposed_verdict in ("HUMAN", "MIXED")
         needs_review = (final_conf < self.conf_threshold) or has_conflict or (not audit_passed and not d2_strong)
 
+        reasoner_note = (
+            reasoner_json.get("reasoning")
+            or reasoner_json.get("explanation")
+            or "No explanation"
+        )
         explanation = (
-            f"Ризонер: {reasoner_json.get('explanation', 'No explanation')} | "
+            f"Ризонер: {reasoner_note} | "
             f"Финальный вердикт: {final_verdict} (уверенность {final_confidence:.2f}) | "
             f"После калибровки: {risk} с вероятностью AI {final_prob:.2f}"
         )
@@ -504,11 +686,20 @@ class CalibratorService:
                 "final_verdict_before_calibration": final_verdict,
                 "final_confidence_before": final_confidence,
                 "bert_mean_score": bert_mean,
+                "bert_num_spans": len(bert_spans),
+                "bert_service_error": bert_res.get("error"),
                 "detectgpt_curvature": dgpt_score,
             }
         )
 
-        logger.info(f"Calibration completed: verdict={final_verdict}, risk={risk}, confidence={final_conf:.4f}, needs_review={needs_review}")
+        logger.info(
+            "[CALIB] done final_prob=%.4f final_conf=%.4f risk=%s needs_review=%s span_count=%s",
+            final_prob,
+            final_conf,
+            risk,
+            needs_review,
+            len(span_results),
+        )
         logger.info("=" * 60)
 
         return result

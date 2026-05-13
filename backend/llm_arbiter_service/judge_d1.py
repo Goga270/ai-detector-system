@@ -81,7 +81,24 @@ REASONER VERDICT:
                 raw = "\n".join(raw.split("\n")[1:])
             if raw.endswith("```"):
                 raw = raw[:-3].strip()
-            return json.loads(raw)
+            data = json.loads(raw)
+            return {
+                "audit_passed": bool(data.get("audit_passed", True)),
+                "critical_errors": list(data.get("critical_errors") or []),
+                "bert_spans_ignored": bool(data.get("bert_spans_ignored", False)),
+                "detectgpt_underestimated": bool(data.get("detectgpt_underestimated", False)),
+                "adjusted_verdict": data.get("adjusted_verdict") or "MIXED",
+                "adjusted_confidence": float(data.get("adjusted_confidence", 0.5)),
+                "needs_human_review": bool(data.get("needs_human_review", False)),
+            }
         except Exception as e:
             logger.error(f"JudgeD1 failed: {e}")
-            return {"audit_passed": False, "issues": [], "error": str(e)}
+            return {
+                "audit_passed": True,
+                "critical_errors": [str(e)],
+                "bert_spans_ignored": False,
+                "detectgpt_underestimated": False,
+                "adjusted_verdict": "MIXED",
+                "adjusted_confidence": 0.5,
+                "needs_human_review": True,
+            }

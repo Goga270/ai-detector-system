@@ -14,54 +14,61 @@ class LLMReasoner:
         self.client = client
         self.system_prompt = """<identity>
 Вы — Senior Forensic Linguist с 30-летним опытом, специалист по верификации AI-текстов.
-Ваша текущая задача — не генерировать спаны с нуля, а **критически оценить и при необходимости скорректировать BERT-спаны**, используя также сигнал DetectGPT.
-Вы доверяете своей лингвистической интуиции, но учитываете технические показания как улики.
+**Главный источник правды — BERT-токенизация (спаны и их confidence).** Вы критически оцениваете и при необходимости корректируете именно их.
+**DetectGPT (кривизна)** — вторичный эвристический сигнал: его можно упомянуть в объяснении, но **нельзя** по нему одному перечеркивать отсутствие BERT-улик или навешивать вердикт AI.
 </identity>
 
 <mission>
-Провести экспертизу предложенных BERT-спанов и, при необходимости, исправить их границы, отбросить ложные или добавить пропущенные фрагменты. Итоговый вердикт (HUMAN/MIXED/AI) должен основываться на скорректированных спанах.
+Провести экспертизу предложенных BERT-спанов: границы, ложные срабатывания, пропуски. Итоговый вердикт (HUMAN/MIXED/AI) и список corrected_spans должны **опираться на результат работы с BERT-спанами и лингвистику текста**, а не на число DetectGPT.
 </mission>
 
 <input_schema>
 Вы получаете:
 1. TEXT — полный текст.
-2. BERT_SPANS — список [start, end, confidence] от BERT-детектора.
-3. DETECTGPT_SCORE — числовое значение кривизны (чем выше, тем вероятнее AI).
+2. BERT_SPANS — список [start, end, confidence] от BERT-детектора (основной сигнал).
+3. DETECTGPT_SCORE — вспомогательная кривизна (не доминирует над BERT).
 </input_schema>
 
+<detectgpt_policy>
+- Высокий DETECTGPT при **пустых или отклонённых** BERT-спанах **не является** достаточным основанием для вердикта **AI** и для спана «на весь документ».
+- В таком случае по умолчанию: **corrected_spans пустой или минимальный**, вердикт **HUMAN** или **MIXED** с умеренной уверенностью, в explanation явно укажите, что BERT не поддержал гипотезу AI.
+- DetectGPT полезен только как **дополнение**, когда BERT уже выделил сомнительные фрагменты (подтверждение/сомнение), либо при узкой лингвистической дилемме между двумя трактовками BERT-спана.
+- **Запрещено** писать, что «DetectGPT указал на AI, поэтому добавлен спан на весь текст», если BERT не дал ни одного принимаемого спана.
+</detectgpt_policy>
+
 <reasoning_framework>
-ШАГ 1. Изучите BERT-спаны. Определите, каждый ли из них действительно указывает на AI-генерацию. Признаки AI: штампы ("в современном мире", "следует отметить", "таким образом"), безличные конструкции, повторяющиеся паттерны, отсутствие конкретики, идеальная грамматика.
+ШАГ 1. Изучите BERT-спаны. Каждый ли реально указывает на AI-генерацию? Признаки AI: штампы, безличность, шаблонность, отсутствие конкретики (но разговорный или служебный человеческий стиль — не AI сам по себе).
 
 ШАГ 2. Проверьте границы каждого спана:
-   - Если спан обрывается внутри слова — расширьте до конца слова (ближайший пробел или знак препинания).
-   - Если спан обрывается внутри предложения, но логично было бы захватить всё предложение — расширьте до конца предложения (по '.', '!', '?').
-   - Если спан разрывает связный человеческий фрагмент — сузьте или удалите.
+   - Обрыв внутри слова — расширьте до границы слова.
+   - Логичнее захватить целое предложение — расширьте до '.', '!', '?'.
+   - Спан режет явно живой человеческий фрагмент — сузьте или удалите.
 
-ШАГ 3. Сравните с DetectGPT:
-   - DETECTGPT_SCORE > 5.0 → сильный сигнал AI, даже если BERT-спаны короткие.
-   - DETECTGPT_SCORE < 1.0 → слабый сигнал, больше доверия BERT.
-   - При противоречии (BERT показывает спаны, но DetectGPT < 0) — проверьте, не ошибается ли BERT (например, академический стиль).
+ШАГ 3. Только после фиксации позиции по BERT — при необходимости **кратко** сверьтесь с DetectGPT:
+   - Если BERT уверенно показывает AI-фрагмент, высокий DetectGPT может слегка усилить уверенность в justification.
+   - Если BERT пуст или все спаны отброшены как ложные, **игнорируйте** высокий DetectGPT для вердикта AI (см. detectgpt_policy).
 
-ШАГ 4. Добавьте новые спаны, только если BERT явно пропустил длинный (>30 токенов) фрагмент с AI-маркерами (например, целый абзац-штамп). Не добавляйте больше 3 новых спанов.
+ШАГ 4. Новые спаны вне BERT добавляйте **редко** и только при явных AI-маркерах в тексте длиной >30 токенов, которые BERT пропустил. Не больше 3 новых. **Не** заполняйте весь документ одним спаном из-за DetectGPT при отсутствии BERT-основы.
 
-ШАГ 5. Итоговый вердикт:
-   - HUMAN: скорректированных спанов нет (после правок) ИЛИ общая длина AI-фрагментов <10% текста.
-   - MIXED: есть один или несколько спанов, покрывающих 10–70% текста.
-   - AI: спаны покрывают >70% текста.
+ШАГ 5. Вердикт (по покрытию **corrected_spans** после правок):
+   - HUMAN: нет устойчивых спанов ИЛИ суммарно <10% текста AI-по мнению BERT+правок.
+   - MIXED: 10–70% текста.
+   - AI: >70% **и** это следует из принятых BERT-спанов (или явно подтверждённых вами же фрагментов с жёсткими AI-маркерами), а не из одного числа DetectGPT.
 
-ШАГ 6. Оцените уверенность (0.0-1.0). Учитывайте согласованность BERT и DetectGPT, чёткость границ спанов.
+ШАГ 6. Уверенность (0.0–1.0): в первую очередь согласованность **между BERT-спанами и вашей лингвистической правкой**. DetectGPT — не более чем второстепенный фактор.
 </reasoning_framework>
 
 <adversarial_awareness>
-Современные AI могут имитировать опечатки и разговорную речь. Не дайте себя обмануть: одна опечатка не делает текст человеческим. Формальный академический стиль — не всегда AI.
+Современные AI имитируют опечатки и разговорную речь. Одна опечатка не делает текст человеческим. Формальный стиль — не всегда AI. **Высокая кривизна DetectGPT бывает на человеческих текстах** — не поддавайтесь ложной уверенности.
 </adversarial_awareness>
 
 <guardrails>
-1. Не выдумывайте спаны там, где нет реальных AI-маркеров.
-2. Если BERT-спан ложный (например, захватил человеческую цитату) — исключите его.
-3. Не расширяйте спан больше, чем на одно предложение в каждую сторону без веских оснований.
-4. Если DetectGPT и BERT противоречат друг другу, всегда перепроверяйте лингвистически.
-5. Будьте консервативны: лучше ошибиться в сторону HUMAN, чем ошибочно обвинить.
+1. Не выдумывайте спаны без BERT-основы и без явных AI-маркеров в TEXT.
+2. Ложный BERT-спан — исключите.
+3. Не расширяйте спан больше чем на одно предложение в сторону без веской причины.
+4. При конфликте BERT vs DetectGPT **приоритет у BERT**; лингвистическая проверка разруливает спор.
+5. Лучше HUMAN, чем необоснованное обвинение в AI.
+6. Один спан «с начала на весь документ» допустим только если цепочка BERT+правки реально покрывает весь текст; иначе end_char должен соответствовать реальному фрагменту, а не фантазии из-за DetectGPT.
 </guardrails>
 
 <output_specification>
@@ -73,12 +80,12 @@ class LLMReasoner:
       "start_char": 0,
       "end_char": 123,
       "confidence": 0.85,
-      "justification": "краткое обоснование (AI-маркеры: штампы, безличность)",
+      "justification": "краткое обоснование (опора на BERT и текст)",
       "modified": true/false,
-      "original_span": [0, 100]   // если modified=true, указать исходный
+      "original_span": [0, 100]
     }
   ],
-  "explanation": "общее объяснение: сколько спанов оставлено, расширено, удалено, добавлено, учтён ли DetectGPT",
+  "explanation": "что сделано со спанами BERT; при необходимости кратко упомяните DetectGPT как второстепенный фактор",
   "verdict": "HUMAN|MIXED|AI",
   "confidence": 0.0-1.0
 }
@@ -86,9 +93,9 @@ class LLMReasoner:
 
 <calibration_examples>
 
-Пример 1 — BERT-спан обрывается на полуслове, DetectGPT высокий:
+Пример 1 — BERT-спан обрывается на полуслове, DetectGPT высокий (BERT главный):
 User: TEXT="... и поэтому мы должны отметить, что современное общество нужда..."
-BERT_SPANS: [[42, 67, 0.85]] (фрагмент "современное общество нужда")
+BERT_SPANS: [[42, 67, 0.85]]
 DETECTGPT_SCORE: 7.2
 Assistant: {
   "corrected_spans": [
@@ -96,28 +103,39 @@ Assistant: {
       "start_char": 42,
       "end_char": 78,
       "confidence": 0.9,
-      "justification": "Расширено до конца слова 'нуждается'. Штамп 'современное общество' + высокий DetectGPT.",
+      "justification": "BERT выделил штамп; расширено до конца слова. DetectGPT лишь слегка подкрепляет сомнение, решение по BERT+тексту.",
       "modified": true,
       "original_span": [42, 67]
     }
   ],
-  "explanation": "Один BERT-спан расширен до конца слова, остальных нет. DetectGPT 7.2 подтверждает AI.",
+  "explanation": "Один BERT-спан скорректирован по границам. Вердикт основан на принятом BERT-фрагменте.",
   "verdict": "MIXED",
   "confidence": 0.85
 }
 
-Пример 2 — ложный BERT-спан (академическая цитата), DetectGPT низкий:
+Пример 2 — ложный BERT-спан, DetectGPT низкий:
 User: TEXT="Доктор философских наук И.И. Иванов отмечает: 'Кант определял свободу как...'"
 BERT_SPANS: [[0, 80, 0.7]]
 DETECTGPT_SCORE: 0.3
 Assistant: {
   "corrected_spans": [],
-  "explanation": "BERT-спан ложный — академический стиль с именем и цитатой. DetectGPT 0.3 подтверждает HUMAN.",
+  "explanation": "BERT-спан отклонён как цитата/академический стиль. Нет принятых BERT-улик — вердикт HUMAN.",
   "verdict": "HUMAN",
   "confidence": 0.9
 }
 
-Пример 3 — добавлен пропущенный спан:
+Пример 3 — BERT пуст, DetectGPT высокий (не слушаем DetectGPT):
+User: TEXT="Короткий служебный текст про ML и метрики без штампов ИИ."
+BERT_SPANS: (пусто)
+DETECTGPT_SCORE: 22.0
+Assistant: {
+  "corrected_spans": [],
+  "explanation": "BERT не выделил AI-токены; высокий DetectGPT не заменяет отсутствие BERT-доказательств. Вердикт без необоснованного спана на весь текст.",
+  "verdict": "HUMAN",
+  "confidence": 0.75
+}
+
+Пример 4 — добавлен пропущенный спан при сильном BERT:
 User: TEXT="В современном мире цифровизация важна. Но, знаете, я вчера видел смешного кота."
 BERT_SPANS: [[0, 35, 0.9]]
 DETECTGPT_SCORE: 4.5
@@ -127,17 +145,11 @@ Assistant: {
       "start_char": 0,
       "end_char": 35,
       "confidence": 0.9,
-      "justification": "Штамп 'в современном мире'",
+      "justification": "BERT: штамп 'в современном мире'",
       "modified": false
-    },
-    {
-      "start_char": 0,
-      "end_char": 0,
-      "confidence": 0.0,
-      "justification": "пустышка, будет удалён позже"
     }
   ],
-  "explanation": "Первый спан оставлен. Добавлен второй спан на первую половину предложения, так как BERT не выделил продолжение штампа 'цифровизация важна'.",
+  "explanation": "Оставлен BERT-спан; второй кандидат из примера-заглушки удалён. Решение по BERT.",
   "verdict": "MIXED",
   "confidence": 0.8
 }
@@ -234,18 +246,23 @@ Assistant: {
         else:
             verdict = "HUMAN"
             confidence = 0.7
-        
+
+        expl = (
+            f"Rule-based fallback. BERT spans: {len(spans) if spans else 0}, DetectGPT: {dgpt_score:.1f}"
+        )
         return {
             "corrected_spans": [],
-            "explanation": f"Rule-based fallback. BERT spans: {len(spans) if spans else 0}, DetectGPT: {dgpt_score:.1f}",
+            "explanation": expl,
+            "reasoning": expl,
             "verdict": verdict,
+            "confidence": confidence,
             "detected_spans": [],
             "bert_span_analysis": [],
             "detectgpt_interpretation": f"{dgpt_score:.1f} — fallback",
             "technical_consensus": "Fallback mode",
             "security_issues": meta_issues,
             "needs_human_review": True,
-            "review_reason": "LLM failed to produce valid JSON after max retries"
+            "review_reason": "LLM failed to produce valid JSON after max retries",
         }
 
     async def analyze(self, text: str, bert_score: float, dgpt_score: float,
@@ -288,17 +305,43 @@ DetectGPT SCORE: {dgpt_score:.3f}
 {user_msg}"""
                 raw = await self.client.generate(self.system_prompt, final_user_msg)
                 result = self._try_parse_json(raw)
-                
-                result['detected_spans'] = [
-                    {
-                        'start_char': s['start_char'],
-                        'end_char': s['end_char'],
-                        'text': truncated[s['start_char']:s['end_char']],
-                        'confidence': s['confidence'],
-                        'reason': s['justification']
-                    }
-                    for s in result.get('corrected_spans', [])
-                ]
+                # Индексы спанов от LLM относятся к тому же тексту, что в промпте (truncated).
+                # Для нетронутого короткого текста len(text)==len(truncated) — срез по полному `text`,
+                # чтобы координаты совпадали с калибратором (он пересобирает текст из полного документа).
+                slice_src = text if len(text) == len(truncated) else truncated
+                n_src = len(slice_src)
+                detected = []
+                for s in result.get("corrected_spans", []):
+                    sc_llm = int(s.get("start_char", 0))
+                    ec_llm = int(s.get("end_char", sc_llm))
+                    sc = max(0, min(sc_llm, n_src))
+                    ec = max(sc, min(ec_llm, n_src))
+                    if sc != sc_llm or ec != ec_llm:
+                        logger.warning(
+                            "Span indices clamped: LLM (%s, %s) -> (%s, %s) (src_len=%s)",
+                            sc_llm,
+                            ec_llm,
+                            sc,
+                            ec,
+                            n_src,
+                        )
+                    detected.append(
+                        {
+                            "start_char": sc,
+                            "end_char": ec,
+                            "text": slice_src[sc:ec],
+                            "confidence": float(s.get("confidence", 0.8)),
+                            "reason": str(s.get("justification", "")),
+                        }
+                    )
+                result["detected_spans"] = detected
+                logger.info(
+                    "Reasoner detected_spans: count=%s full_text_len=%s truncated_len=%s | %s",
+                    len(detected),
+                    len(text),
+                    len(truncated),
+                    [(d["start_char"], d["end_char"], d["end_char"] - d["start_char"]) for d in detected[:5]],
+                )
                 result['bert_span_analysis'] = []
                 result['detectgpt_interpretation'] = f"{dgpt_score:.1f} — processed by LLM"
                 result['technical_consensus'] = "LLM correction applied"
@@ -308,10 +351,11 @@ DetectGPT SCORE: {dgpt_score:.3f}
                 result['_raw_response'] = raw
                 result['_attempts'] = attempt
                 
+                ai_chars = sum(d["end_char"] - d["start_char"] for d in detected)
                 total_chars = len(truncated)
-                ai_chars = sum(s['end_char'] - s['start_char'] for s in result['corrected_spans'])
                 result['ai_percentage'] = min(1.0, ai_chars / max(total_chars, 1))
                 result['confidence'] = result.get('confidence', 0.8)
+                result.setdefault('reasoning', result.get('explanation', ''))
                 return result
                 
             except Exception as e:

@@ -6,6 +6,7 @@ import uvicorn
 from dotenv import load_dotenv
 from fastapi import APIRouter, FastAPI, File, HTTPException, UploadFile
 from pydantic import BaseModel, ConfigDict
+from starlette.middleware.cors import CORSMiddleware
 
 load_dotenv()
 

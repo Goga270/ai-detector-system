@@ -87,7 +87,20 @@ CURRENT VERDICT:
                 raw = "\n".join(raw.split("\n")[1:])
             if raw.endswith("```"):
                 raw = raw[:-3].strip()
-            return json.loads(raw)
+            data = json.loads(raw)
+            return {
+                "defense_arguments": list(data.get("defense_arguments") or []),
+                "would_overturn": bool(data.get("would_overturn", False)),
+                "defense_confidence": float(data.get("defense_confidence", 0.0)),
+                "proposed_verdict": data.get("proposed_verdict"),
+                "explanation": str(data.get("explanation") or ""),
+            }
         except Exception as e:
             logger.error(f"JudgeD2 failed: {e}")
-            return {"defense_arguments": [], "error": str(e)}
+            return {
+                "defense_arguments": [],
+                "would_overturn": False,
+                "defense_confidence": 0.0,
+                "proposed_verdict": None,
+                "explanation": f"Judge unavailable: {e}",
+            }

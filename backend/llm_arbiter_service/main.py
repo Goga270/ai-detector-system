@@ -113,15 +113,16 @@ async def run_reasoner(request: ReasonerRequest):
     try:
         result = await reasoner.analyze(
             text=request.text,
-            bert_mean=request.bert_mean,
+            bert_score=request.bert_mean,
             dgpt_score=request.dgpt_score,
             spans=prepare_spans(request.spans),
         )
+        reasoning_text = result.get("reasoning") or result.get("explanation") or ""
         return ReasonerResponse(
             verdict=result.get("verdict", "UNKNOWN"),
             confidence=result.get("confidence", 0.0),
             ai_percentage=result.get("ai_percentage", 0.0),
-            reasoning=result.get("reasoning", ""),
+            reasoning=reasoning_text,
             bert_span_analysis=result.get("bert_span_analysis"),
             detected_spans=result.get("detected_spans"),
             technical_consensus=result.get("technical_consensus"),
@@ -138,8 +139,8 @@ async def run_audit(request: AuditRequest):
         reasoner_dict = request.reasoner_result.model_dump()
         result = await judge_d1.audit(
             text=request.text,
-            reasoner_result=reasoner_dict,
-            bert_mean=request.bert_mean,
+            reasoner_verdict=reasoner_dict,
+            bert_score=request.bert_mean,
             dgpt_score=request.dgpt_score,
             spans=prepare_spans(request.spans),
         )
@@ -154,8 +155,8 @@ async def run_defense(request: DefenseRequest):
         reasoner_dict = request.reasoner_result.model_dump()
         result = await judge_d2.defend(
             text=request.text,
-            reasoner_result=reasoner_dict,
-            bert_mean=request.bert_mean,
+            current_verdict=reasoner_dict,
+            bert_score=request.bert_mean,
             dgpt_score=request.dgpt_score,
             spans=prepare_spans(request.spans),
         )
