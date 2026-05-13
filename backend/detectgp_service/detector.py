@@ -1,3 +1,5 @@
+import threading
+
 import torch
 from typing import Dict, Any
 from detectgpt_lightweight import LightweightDetectGPT
@@ -26,13 +28,16 @@ class DetectGPTService:
             max_length=max_length,
             log_prob_type=log_prob_type
         )
+        self._infer_lock = threading.Lock()
 
     def predict(self, text: str) -> Dict[str, Any]:
-        results = self.detector.detect_batch([text])
+        with self._infer_lock:
+            results = self.detector.detect_batch([text])
         return results[0]
 
     def predict_batch(self, texts: list[str]) -> list[Dict[str, Any]]:
-        return self.detector.detect_batch(texts)
+        with self._infer_lock:
+            return self.detector.detect_batch(texts)
 
     @property
     def model_info(self) -> Dict[str, Any]:

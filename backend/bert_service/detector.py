@@ -1,3 +1,5 @@
+import threading
+
 import torch
 import numpy as np
 from typing import List, Dict, Any
@@ -17,6 +19,7 @@ class BERTService:
             window_size=window_size,
             overlap_ratio=overlap_ratio
         )
+        self._infer_lock = threading.Lock()
 
     def predict_spans(
         self,
@@ -24,8 +27,9 @@ class BERTService:
         min_confidence: float = 0.5,
         min_span_tokens: int = 3
     ) -> List[Dict[str, Any]]:
-        return self.detector.predict_spans_sliding_window(
-            text,
-            min_confidence=min_confidence,
-            min_span_tokens=min_span_tokens
-        )
+        with self._infer_lock:
+            return self.detector.predict_spans_sliding_window(
+                text,
+                min_confidence=min_confidence,
+                min_span_tokens=min_span_tokens,
+            )
