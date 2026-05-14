@@ -1,52 +1,165 @@
-version: '3.8'
-
 services:
-  # 1. ФРОНТЕНД
+  # 1. ФРОНТЕНД (Nuxt 4)
   frontend:
     build:
       context: ./frontend
+      dockerfile: Dockerfile
     ports:
       - "3000:3000"
     environment:
-      - NUXT_PUBLIC_API_BASE_URL=http://backend:8004
-      - NUXT_PUBLIC_USE_MOCKS=true
+      # Браузер на твоем Маке будет стучаться на localhost:8004 (External API)
+      - NUXT_PUBLIC_API_BASE_URL=http://localhost:8004
+      - NUXT_PUBLIC_USE_MOCKS=false
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
+    networks:
+      - ai-network
 
-  # 2. JAVA БЭКЕНД
+  # 2. ГЕЙТВЕЙ (External Service - входная точка для фронта)
   backend:
     build:
-      context: ./backend
+      context: .
+      dockerfile: ./backend/Dockerfile
+      args:
+        SERVICE_NAME: external_service
     ports:
-      - "8080:8080"
+      - "8004:8000"
+    working_dir: /app/backend/external_service
+    # Явно указываем команду запуска для каждого сервиса
+    #command: python -m uvicorn main:app --host 0.0.0.0 --port 8000 --loop asyncio
     environment:
-      - ML_CALIBRATOR_URL=http://calibrator:8000/predict
+      - CALIBRATOR_URL=http://calibrator:8000/predict
+      - YANDEX_API_KEY=${YANDEX_API_KEY}
+      - YANDEX_FOLDER_ID=${YANDEX_FOLDER_ID}
+      - EXTERNAL_HOST=0.0.0.0
+      - EXTERNAL_PORT=8004
+      - EXTERNAL_HTTP_TIMEOUT=300
+      - EXTERNAL_CALIBRATOR_URL=http://calibrator:8000/calibrator/calibrate
+      - EXTERNAL_CALIBRATOR_HEALTH_URL=http://calibrator:8000/calibrator/health
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8000/gateway/health" ]
+      interval: 10s
+      timeout: 5s
+      retries: 3
     depends_on:
-      - calibrator
+      calibrator:
+        condition: service_healthy
+    networks:
+      - ai-network
 
-  # 3. ML СЛОЙ
+  # 3. КАЛИБРАТОР (Оркестратор ML-логики)
   calibrator:
     build:
-      context: ./ml/api/calibrator
-    ports:
-      - "8000:8000"
-    # expose:
-    #  - "8000" # Порт доступен только внутри сети Docker для Java Бэка
+      context: .
+      dockerfile: ./backend/Dockerfile
+      args:
+        SERVICE_NAME: calibrator_service
+    working_dir: /app/backend/calibrator_service
+    #command: python -m uvicorn main:app --host 0.0.0.0 --port 8000 --loop asyncio
     environment:
-      - BERT_URL=http://bert-service:8000/score
-      - DETECTGPT_URL=http://detectgpt-service:8000/score
+      - CALIBRATOR_BERT_URL=http://bert-service:8000/bert/predict
+      - CALIBRATOR_DETECTGPT_URL=http://detectgpt-service:8000/detectgpt/predict
+      - CALIBRATOR_REASONER_URL=http://llm-arbiter:8000/arbiter/reasoner
+      - CALIBRATOR_AUDIT_URL=http://llm-arbiter:8000/arbiter/audit
+      - CALIBRATOR_DEFENSE_URL=http://llm-arbiter:8000/arbiter/defend
+      - CALIBRATOR_HOST=0.0.0.0
+      - CALIBRATOR_PORT=8000
+      - CALIBRATOR_HTTP_TIMEOUT=300
+      - YANDEX_API_KEY=${YANDEX_API_KEY}
+      - YANDEX_FOLDER_ID=${YANDEX_FOLDER_ID}
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8000/calibrator/health" ]
+      interval: 10s
+      timeout: 5s
+      retries: 3
     depends_on:
-      - bert-service
-      - detectgpt-service
+      bert-service:
+        condition: service_healthy
+      detectgpt-service:
+        condition: service_healthy
+      llm-arbiter:
+        condition: service_healthy
+    networks:
+      - ai-network
 
+  # 4. BERT СЕРВИС
   bert-service:
     build:
-      context: ./ml/api/bert_service
-    expose:
-      - "8000"
+      context: .
+      dockerfile: ./backend/Dockerfile
+      args:
+        SERVICE_NAME: bert_service
+    environment:
+      - BERT_PORT=8000
+      - BERT_MODEL_PATH=/app/backend/bert_service/bert_model
+      - BERT_WINDOW_SIZE=128
+      - BERT_OVERLAP_RATIO=0.8
+    working_dir: /app/backend/bert_service
+    #command: python -m uvicorn main:app --host 0.0.0.0 --port 8000 --loop asyncio
+    volumes:
+      # Прокидываем веса моделей внутрь контейнера
+      - ./backend/bert_service/bert_model:/app/backend/bert_service/bert_model
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8000/bert/health" ]
+      interval: 10s       # Как часто проверять
+      timeout: 5s         # Сколько ждать ответа
+      retries: 5          # Сколько раз пытаться, прежде чем признать "мертвым"
+      start_period: 30s   # Даем 30 секунд форы на загрузку весов (в это время ошибки не считаются)
+    networks:
+      - ai-network
 
+  # 5. DETECTGPT СЕРВИС
   detectgpt-service:
     build:
-      context: ./ml/api/detectgpt_service
-    expose:
-      - "8000"
+      context: .
+      dockerfile: ./backend/Dockerfile
+      args:
+        SERVICE_NAME: detectgp_service
+    environment:
+      - DETECTGPT_PORT=8000
+      - DETECTGPT_TARGET_MODEL=gpt2
+      - DETECTGPT_PERTURBATION_MODEL=t5-base
+      - DETECTGPT_NUM_PERTURBATIONS=5
+      - DETECTGPT_BATCH_SIZE=4
+      - DETECTGPT_MASK_RATE=0.15
+      - DETECTGPT_SPAN_LENGTH=4
+      - DETECTGPT_MAX_LENGTH=512
+      - DETECTGPT_LOG_PROB_TYPE=mean
+    working_dir: /app/backend/detectgp_service
+    #command: python -m uvicorn main:app --host 0.0.0.0 --port 8000 --loop asyncio
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8000/detectgpt/health" ]
+      interval: 10s
+      timeout: 5s
+      retries: 10         # Здесь даем больше попыток
+      start_period: 60s   # DetectGPT грузит две модели (GPT2 и T5), даем ему минуту форы
+    networks:
+      - ai-network
+
+  # 6. LLM ARBITER (Судьи и Ризонер)
+  llm-arbiter:
+    build:
+      context: .
+      dockerfile: ./backend/Dockerfile
+      args:
+        SERVICE_NAME: llm_arbiter_service
+    working_dir: /app/backend/llm_arbiter_service
+    #command: python -m uvicorn main:app --host 0.0.0.0 --port 8000 --loop asyncio
+    environment:
+      - YANDEX_API_KEY=${YANDEX_API_KEY}
+      - YANDEX_FOLDER_ID=${YANDEX_FOLDER_ID}
+      - YANDEX_MODEL_TYPE=yandexgpt
+      - LLM_ARBITER_HOST=0.0.0.0
+      - LLM_ARBITER_PORT=8000
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8000/arbiter/health" ]
+      interval: 10s
+      timeout: 5s
+      retries: 3          # Грузится мгновенно, 3 попыток достаточно
+    networks:
+      - ai-network
+
+networks:
+  ai-network:
+    driver: bridge

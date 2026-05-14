@@ -4,7 +4,7 @@ from pathlib import Path
 import torch
 import uvicorn
 from dotenv import load_dotenv
-from fastapi import APIRouter, FastAPI, HTTPException
+from fastapi import APIRouter, FastAPI, HTTPException, Response
 from pydantic import BaseModel
 
 from detector import BERTService
@@ -98,7 +98,10 @@ def predict(request: TextRequest):
 
 
 @router.get("/health")
-def health():
+def health(response: Response):
+    if service is None:
+        response.status_code = 503
+        return {"status": "loading", "service": "bert"}
     return {"status": "ok", "service": "bert"}
 
 

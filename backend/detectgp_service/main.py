@@ -1,9 +1,11 @@
 import os
-
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
+os.environ["OMP_NUM_THREADS"] = "1"
+os.environ["MKL_NUM_THREADS"] = "1"
 import torch
 import uvicorn
 from dotenv import load_dotenv
-from fastapi import APIRouter, FastAPI, HTTPException
+from fastapi import APIRouter, FastAPI, HTTPException, Response
 from pydantic import BaseModel
 
 from detector import DetectGPTService
@@ -74,7 +76,10 @@ def predict(request: TextRequest):
 
 
 @router.get("/health")
-def health():
+def health(response: Response):
+    if service is None:
+        response.status_code = 503
+        return {"status": "loading", "service": "detectgpt"}
     return {"status": "ok", "service": "detectgpt"}
 
 

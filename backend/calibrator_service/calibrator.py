@@ -4,6 +4,7 @@ import time
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Dict, List, Optional
+import os
 
 import numpy as np
 import requests
@@ -57,11 +58,11 @@ class CalibratorService:
         detectgpt_weight: float = 0.2,
         penalty_d1: float = 0.3,
         penalty_d2: float = 0.5,
-        bert_url: str = "http://127.0.0.1:8000/bert/predict",
-        dgpt_url: str = "http://127.0.0.1:8001/detectgpt/predict",
-        reasoner_url: str = "http://127.0.0.1:8002/arbiter/reasoner",
-        audit_url: str = "http://127.0.0.1:8002/arbiter/audit",
-        defense_url: str = "http://127.0.0.1:8002/arbiter/defend",
+        bert_url=os.getenv("CALIBRATOR_BERT_URL", "http://127.0.0.1:8000/bert/predict"),
+        dgpt_url=os.getenv("CALIBRATOR_DETECTGPT_URL", "http://127.0.0.1:8001/detectgpt/predict"),
+        reasoner_url=os.getenv("CALIBRATOR_REASONER_URL", "http://127.0.0.1:8002/arbiter/reasoner"),
+        audit_url=os.getenv("CALIBRATOR_AUDIT_URL", "http://127.0.0.1:8002/arbiter/audit"),
+        defense_url=os.getenv("CALIBRATOR_DEFENSE_URL", "http://127.0.0.1:8002/arbiter/defend"),
         timeout: int = 300,
     ):
         self.conf_threshold = confidence_threshold

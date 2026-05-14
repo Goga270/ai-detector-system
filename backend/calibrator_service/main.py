@@ -129,6 +129,20 @@ def calibrate(request: TextRequest):
 def health():
     return {"status": "ok", "service": "calibrator"}
 
+@app.get("/debug/config")
+async def get_config():
+    return {
+        "bert_url": calibrator.bert_url,
+        "detectgpt_url": calibrator.dgpt_url,
+        "reasoner_url": calibrator.reasoner_url,
+        "audit_url": calibrator.audit_url,
+        "defense_url": calibrator.defense_url,
+        "environment_vars": {
+            "BERT_URL_ENV": os.getenv("BERT_URL"),
+            "DGPT_URL_ENV": os.getenv("DGPT_URL"),
+        }
+    }
+
 
 app.include_router(router)
 

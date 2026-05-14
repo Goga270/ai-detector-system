@@ -62,7 +62,7 @@ function handleClear() {
     </label>
     <div class="glass-card rounded-2xl overflow-hidden hover:border-primary/50 group">
       <textarea
-        class="overflow-hidden flex outline-none focus:outline-none custom-scrollbar w-full min-h-[400px] resize-none bg-input/30 p-6 text-foreground placeholder:text-muted-foreground text-base leading-relaxed"
+        class="overflow-y-auto flex outline-none focus:outline-none custom-scrollbar w-full min-h-[400px] resize-none bg-input/30 p-6 text-foreground placeholder:text-muted-foreground text-base leading-relaxed"
         :value="modelValue"
         placeholder="Вставьте или введите текст для проверки на наличие ИИ-генерации..."
         @input="handleChange"

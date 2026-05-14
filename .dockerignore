@@ -1,0 +1,10 @@
+frontend/
+ml/
+.git/
+.nuxt/
+.output/
+node_modules/
+venv/
+.venv/
+.idea
+.gitignore

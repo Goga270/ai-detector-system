@@ -4,7 +4,8 @@ from typing import Any, Dict, List, Optional
 import httpx
 import uvicorn
 from dotenv import load_dotenv
-from fastapi import APIRouter, FastAPI, File, HTTPException, UploadFile
+from fastapi import APIRouter, FastAPI, File, HTTPException, UploadFile, Response
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, ConfigDict
 from starlette.middleware.cors import CORSMiddleware
 
@@ -114,8 +115,10 @@ async def detect_pdf(file: UploadFile = File(...)):
     return AnalysisResponse(**data)
 
 
+from fastapi import Response # Добавь в импорты
+
 @router.get("/health")
-def health():
+def health(response: Response):
     cal_ok = False
     detail: Optional[str] = None
     if _client is not None:
@@ -124,8 +127,13 @@ def health():
             cal_ok = r.status_code == 200
         except httpx.RequestError as e:
             detail = str(e)
+
+    # Если калибратор недоступен, гейтвей тоже не должен принимать запросы
+    if not cal_ok:
+        response.status_code = 503
+
     return {
-        "status": "ok",
+        "status": "ok" if cal_ok else "error",
         "service": "gateway",
         "calibrator": cal_ok,
         "calibrator_url": CALIBRATOR_URL,

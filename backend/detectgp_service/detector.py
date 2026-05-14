@@ -1,5 +1,4 @@
 import threading
-
 import torch
 from typing import Dict, Any
 from detectgpt_lightweight import LightweightDetectGPT

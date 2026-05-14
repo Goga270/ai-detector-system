@@ -26,15 +26,14 @@ const strokeDashoffset = computed(() => {
 
 // Логика цвета (используем твои переменные из main.css)
 const color = computed(() => {
-  if (props.value > 70) return 'rgb(var(--destructive))'; // Красный (ИИ)
-  if (props.value > 40) return 'rgb(var(--warning))'; // Желтый (Подозрительно)
+  if (props.value > 70) return 'rgb(var(--destructive))';
+  if (props.value > 35) return 'rgb(var(--warning))';
 
-  return 'rgb(var(--success))'; // Зеленый (Человек)
+  return 'rgb(var(--success))';
 });
 
 // Плавная анимация числа при монтировании или изменении
 const animate = () => {
-  // Простая анимация: число "добегает" до нужного значения
   const duration = 1500;
 
   const start = animatedValue.value;
